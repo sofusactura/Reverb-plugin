@@ -60,6 +60,7 @@ public:
                 if (step < 0)
                     step += numSteps;
 
+                currentStep = step;
                 const bool open = ((p.pattern >> step) & 1u) != 0 && (position - whole) < (double) p.length;
                 target = open ? 1.0f : floorGain;
             }
@@ -75,6 +76,9 @@ public:
             position = std::fmod (position, (double) numSteps);
     }
 
+    /** The step the gate was on at the end of the last block (for the interface). */
+    int getCurrentStep() const noexcept { return currentStep; }
+
 private:
     float coefficient (float ms) const noexcept
     {
@@ -84,5 +88,6 @@ private:
     double sampleRate = 44100.0;
     double position = 0.0;
     float envelope = 1.0f;
+    int currentStep = 0;
 };
 } // namespace hgr

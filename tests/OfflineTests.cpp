@@ -1,6 +1,7 @@
 // Headless checks that run the real processor offline: no host or audio device needed.
 
 #include "PluginProcessor.h"
+#include "Presets.h"
 
 #include <iostream>
 
@@ -366,11 +367,60 @@ void testSampleRatesAndMono()
     processor.processBlock (buffer, midi);
     check (allFinite (buffer) && buffer.getMagnitude (1, 0, 512) > 0.01f, "mono input reaches both outputs");
 }
+
+/** Renders the editor to a PNG, so the interface can be checked without a host. */
+int writeScreenshot (const juce::File& file, int presetIndex)
+{
+    HybridGateReverbProcessor processor;
+    processor.prepareToPlay (48000.0, 512);
+    processor.loadFactoryPreset (presetIndex);
+
+    std::unique_ptr<juce::AudioProcessorEditor> editor (processor.createEditor());
+
+    const auto image = editor->createComponentSnapshot (editor->getLocalBounds(), true, 2.0f);
+    file.deleteFile();
+    juce::FileOutputStream stream (file);
+    return stream.openedOk() && juce::PNGImageFormat().writeImageToStream (image, stream) ? 0 : 1;
+}
+
+void testPresets()
+{
+    std::cout << "Factory presets" << std::endl;
+    Harness h;
+    const int count = (int) getFactoryPresets().size();
+
+    for (int i = 0; i < count; ++i)
+    {
+        h.processor.loadFactoryPreset (i);
+        h.processor.reset();
+        auto input = noise (48000 * 2);
+        input.clear (48000, 48000);
+        const auto output = h.render (input);
+        const float level = dB (rms (output, 24000, 24000)) - dB (rms (input, 24000, 24000));
+
+        check (allFinite (output) && level > -12.0f && level < 9.0f && output.getMagnitude (0, output.getNumSamples()) < 4.0f,
+               juce::String (getFactoryPresets()[(size_t) i].name) + ": level " + juce::String (level, 1) + " dB re input");
+    }
+
+    // User preset files round-trip.
+    const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("hgr-test.hgrpreset");
+    h.processor.loadFactoryPreset (count - 1);
+    const float before = h.processor.apvts.getRawParameterValue (ParamIDs::highCut)->load();
+    check (h.processor.savePresetFile (file), "preset file is written");
+    h.processor.loadFactoryPreset (0);
+    check (h.processor.loadPresetFile (file) && h.processor.apvts.getRawParameterValue (ParamIDs::highCut)->load() == before
+               && h.processor.getPresetName() == "hgr-test",
+           "preset file loads back with the same values");
+    file.deleteFile();
+}
 } // namespace
 
-int main()
+int main (int argc, char* argv[])
 {
     juce::ScopedJuceInitialiser_GUI juceInit;
+
+    if (argc >= 3 && juce::String (argv[1]) == "--screenshot")
+        return writeScreenshot (juce::File::getCurrentWorkingDirectory().getChildFile (argv[2]), argc >= 4 ? juce::String (argv[3]).getIntValue() : 0);
 
     testDryPassThrough();
     testRoutingsAndAlgorithms();
@@ -380,6 +430,7 @@ int main()
     testGate();
     testStateRoundTrip();
     testSampleRatesAndMono();
+    testPresets();
 
     std::cout << (failures == 0 ? "\nAll checks passed." : "\nFAILED checks: " + juce::String (failures)) << std::endl;
     return failures == 0 ? 0 : 1;

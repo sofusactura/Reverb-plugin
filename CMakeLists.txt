@@ -56,7 +56,14 @@ target_sources(HybridGateReverb PRIVATE
     src/PluginProcessor.cpp
     src/PluginEditor.cpp
     src/ConvolutionEngine.cpp
+    src/Presets.cpp
+    src/ui/Theme.cpp
     src/dsp/IRGenerator.cpp)
+
+juce_add_binary_data(HybridGateReverbAssets SOURCES
+    assets/fonts/Archivo-SemiBold.ttf
+    assets/fonts/Archivo-Bold.ttf
+    assets/fonts/IBMPlexMono-Medium.ttf)
 
 target_include_directories(HybridGateReverb PUBLIC src)
 
@@ -69,6 +76,7 @@ target_compile_definitions(HybridGateReverb PUBLIC
 
 target_link_libraries(HybridGateReverb
     PRIVATE
+        HybridGateReverbAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

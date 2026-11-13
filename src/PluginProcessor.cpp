@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Presets.h"
 
 namespace
 {
@@ -501,6 +502,8 @@ void HybridGateReverbProcessor::processChunk (float* left, float* right, int num
                 gateParams.pattern |= 1u << i;
 
         gate.process (left, right, numSamples, gateParams, bpm, hostSynced, ppq);
+        gateStepForUi.store (gateParams.enabled ? gate.getCurrentStep() : -1, std::memory_order_relaxed);
+        bpmForUi.store ((float) bpm, std::memory_order_relaxed);
     }
 
     //==========================================================================
@@ -563,10 +566,95 @@ void HybridGateReverbProcessor::clearUserImpulseResponse()
     convolution.clearUserFile();
 }
 
+//==============================================================================
+void HybridGateReverbProcessor::loadFactoryPreset (int index)
+{
+    const auto& presets = getFactoryPresets();
+    index = juce::jlimit (0, (int) presets.size() - 1, index);
+    const auto& preset = presets[(size_t) index];
+
+    auto set = [this] (const juce::String& id, float realValue)
+    {
+        if (auto* parameter = apvts.getParameter (id))
+            parameter->setValueNotifyingHost (parameter->convertTo0to1 (realValue));
+        else
+            jassertfalse;   // a preset names a parameter that does not exist
+    };
+
+    // Start from the defaults so presets only need to list what they change.
+    for (auto* parameter : getParameters())
+        parameter->setValueNotifyingHost (parameter->getDefaultValue());
+
+    for (const auto& [id, value] : preset.values)
+        set (id, value);
+
+    if (preset.gatePattern != 0)
+        for (int i = 0; i < hgr::TranceGate::maxSteps; ++i)
+            set (ParamIDs::gateStep (i), ((preset.gatePattern >> i) & 1u) != 0 ? 1.0f : 0.0f);
+
+    presetName = preset.name;
+    presetCategory = preset.category;
+    factoryPresetIndex = index;
+}
+
+juce::File HybridGateReverbProcessor::getUserPresetFolder()
+{
+    return juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+        .getChildFile ("HybridGate Reverb").getChildFile ("Presets");
+}
+
+juce::String HybridGateReverbProcessor::getPresetName() const { return presetName; }
+juce::String HybridGateReverbProcessor::getPresetCategory() const { return presetCategory; }
+
+bool HybridGateReverbProcessor::savePresetFile (const juce::File& file)
+{
+    presetName = file.getFileNameWithoutExtension();
+    presetCategory = "User";
+    factoryPresetIndex = -1;
+
+    auto state = apvts.copyState();
+    state.setProperty ("userIRPath", convolution.getUserFile().getFullPathName(), nullptr);
+    state.setProperty ("presetName", presetName, nullptr);
+    state.setProperty ("presetCategory", presetCategory, nullptr);
+
+    const auto xml = state.createXml();
+    return xml != nullptr && file.getParentDirectory().createDirectory().wasOk() && xml->writeTo (file);
+}
+
+bool HybridGateReverbProcessor::loadPresetFile (const juce::File& file)
+{
+    const auto xml = juce::XmlDocument::parse (file);
+
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return false;
+
+    restoreState (juce::ValueTree::fromXml (*xml));
+    presetName = file.getFileNameWithoutExtension();
+    presetCategory = "User";
+    factoryPresetIndex = -1;
+    return true;
+}
+
+void HybridGateReverbProcessor::restoreState (const juce::ValueTree& state)
+{
+    const auto path = state.getProperty ("userIRPath").toString();
+    presetName = state.getProperty ("presetName", "Init").toString();
+    presetCategory = state.getProperty ("presetCategory", "Default").toString();
+    factoryPresetIndex = (int) state.getProperty ("factoryPreset", -1);
+    apvts.replaceState (state);
+
+    // A missing file simply leaves the engine on its built-in fallback.
+    if (path.isEmpty() || ! juce::File::isAbsolutePath (path) || ! convolution.setUserFile (juce::File (path)))
+        convolution.clearUserFile();
+}
+
 void HybridGateReverbProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty ("userIRPath", convolution.getUserFile().getFullPathName(), nullptr);
+    state.setProperty ("presetName", presetName, nullptr);
+    state.setProperty ("presetCategory", presetCategory, nullptr);
+    state.setProperty ("factoryPreset", factoryPresetIndex, nullptr);
 
     if (const auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
@@ -576,16 +664,8 @@ void HybridGateReverbProcessor::setStateInformation (const void* data, int sizeI
 {
     const auto xml = getXmlFromBinary (data, sizeInBytes);
 
-    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
-        return;
-
-    auto state = juce::ValueTree::fromXml (*xml);
-    const auto path = state.getProperty ("userIRPath").toString();
-    apvts.replaceState (state);
-
-    // A missing file simply leaves the engine on its built-in fallback.
-    if (path.isEmpty() || ! juce::File::isAbsolutePath (path) || ! convolution.setUserFile (juce::File (path)))
-        convolution.clearUserFile();
+    if (xml != nullptr && xml->hasTagName (apvts.state.getType()))
+        restoreState (juce::ValueTree::fromXml (*xml));
 }
 
 juce::AudioProcessorEditor* HybridGateReverbProcessor::createEditor()

@@ -92,6 +92,20 @@ public:
     void clearUserImpulseResponse();
     juce::File getUserImpulseResponse() const { return convolution.getUserFile(); }
 
+    //==========================================================================
+    // Presets. Factory presets live in Presets.cpp; user presets are files in getUserPresetFolder().
+    void loadFactoryPreset (int index);
+    bool loadPresetFile (const juce::File& file);
+    bool savePresetFile (const juce::File& file);
+    static juce::File getUserPresetFolder();
+    juce::String getPresetName() const;
+    juce::String getPresetCategory() const;
+    int getFactoryPresetIndex() const noexcept { return factoryPresetIndex; }
+
+    // Read by the interface.
+    std::atomic<int> gateStepForUi { -1 };
+    std::atomic<float> bpmForUi { 120.0f };
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -111,7 +125,11 @@ private:
     hgr::ConvolutionEngine::Settings convolutionSettings() const noexcept;
     void processChunk (float* left, float* right, int numSamples, double bpm, bool hostSynced, double ppq) noexcept;
 
+    void restoreState (const juce::ValueTree& state);
+
     Raw raw {};
+    juce::String presetName { "Init" }, presetCategory { "Default" };
+    int factoryPresetIndex = 0;
 
     hgr::ConvolutionEngine convolution;
     hgr::AlgoReverb algo;

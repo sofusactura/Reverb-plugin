@@ -15,7 +15,9 @@ Built with [JUCE](https://juce.com) 9 and CMake.
 VST3 covers FL Studio, Ableton Live, Cubase/Nuendo, Studio One, Reaper, Bitwig and Reason. AU covers
 Logic Pro and GarageBand. Pro Tools (AAX) is not built: it needs Avid's SDK and signing tools.
 
-> Status: the DSP is functional. The interface is a plain parameter list on purpose; the real design comes later.
+![The HybridGate Reverb interface](docs/interface.png)
+
+The full user manual is in [docs/MANUAL.md](docs/MANUAL.md).
 
 ## Signal flow
 
@@ -91,7 +93,7 @@ sudo apt-get install -y libasound2-dev libjack-jackd2-dev libfreetype-dev libfon
 ## Tests
 
 `tests/OfflineTests.cpp` runs the real processor without a host: dry pass-through, every routing and
-algorithm, every impulse response, extreme settings with random block sizes, freeze, gate timing, state
+algorithm, every impulse response, every factory preset, extreme settings with random block sizes, freeze, gate timing, state
 save/restore, sample rates from 22 kHz to 192 kHz and mono input.
 
 ```bash
@@ -104,7 +106,11 @@ CI also runs [pluginval](https://github.com/Tracktion/pluginval) at strictness 1
 
 ```
 src/PluginProcessor.*      parameters, signal flow, state
-src/PluginEditor.*         placeholder interface (to be replaced by the real design)
+src/PluginEditor.*         the one-page interface
+src/ui/                    look and feel, knobs, step row, tail picture
+src/Presets.*              factory presets
+assets/fonts/              Archivo and IBM Plex Mono (SIL Open Font License)
+docs/MANUAL.md             user manual
 src/ConvolutionEngine.*    convolution reverb and background impulse-response builder
 src/dsp/AlgoReverb.h       algorithmic reverb (feedback delay network)
 src/dsp/IRGenerator.*      built-in impulse-response synthesis and shaping
