@@ -48,8 +48,12 @@ parameter.
 
 ## Getting a build
 
-Every push builds all three platforms on GitHub Actions. Open the **Actions** tab, pick the latest run and
-download the artifact for your system.
+**Installers:** download the Windows setup `.exe` or the macOS `.pkg` from the
+[latest release](https://github.com/sofusactura/Reverb-plugin/releases/latest). They are not code-signed yet:
+on Windows choose *More info > Run anyway*, on macOS right-click the package and choose *Open*.
+
+**Manual install:** every push also builds all three platforms on GitHub Actions. Open the **Actions** tab,
+pick the latest run and download the artifact for your system.
 
 Install the VST3 by copying the whole `HybridGate Reverb.vst3` folder to:
 

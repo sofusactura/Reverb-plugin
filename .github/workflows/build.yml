@@ -63,6 +63,29 @@ jobs:
             build/HybridGateReverb_artefacts/Release/LV2
             build/HybridGateReverb_artefacts/Release/Standalone
 
+      - name: Read version
+        shell: bash
+        run: echo "VERSION=$(sed -n 's/^project(.* VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)" >> "$GITHUB_ENV"
+
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DVersion=$env:VERSION" "/DSourceDir=$PWD\build\HybridGateReverb_artefacts\Release" installer\windows.iss
+
+      - name: Build macOS installer
+        if: runner.os == 'macOS'
+        run: installer/macos.sh "$VERSION" build/HybridGateReverb_artefacts/Release build/installer
+
+      - name: Upload installer
+        if: runner.os != 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Installer-${{ matrix.name }}
+          if-no-files-found: error
+          path: build/installer/*
+
       - name: Validate VST3 with pluginval
         shell: bash
         run: |
@@ -70,3 +93,24 @@ jobs:
           unzip -q pluginval.zip
           ${{ matrix.pluginval_bin }} --strictness-level 10 --validate-in-process --timeout-ms 600000 \
             --validate "build/HybridGateReverb_artefacts/Release/VST3/HybridGate Reverb.vst3"
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Installer-*
+          merge-multiple: true
+          path: installers
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            installers/*
+            docs/MANUAL.md
+          generate_release_notes: true
